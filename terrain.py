@@ -29,47 +29,11 @@ class Terrain(object):
     # perlin noise object
     self.tmp = OpenSimplex(0)
 
-    # create the veritices array
-    verts = [
-      [
-        x, y, 1.5 * self.tmp.noise2(x=n/5, y=m/5)
-      ] for n, x in enumerate(self.xpoints) for m, y in enumerate(self.ypoints)
-    ]
-    verts = np.array(verts, dtype=np.float32)
-
-    # create the faces and colors arrays
-    faces = []
-    colors = []
-    for m in range(self.nfaces - 1):
-      yoff = m * self.nfaces
-      for n in range(self.nfaces - 1):
-        faces.append([
-          # Current row
-          yoff + n,
-          # Next row
-          self.nfaces + yoff + n,
-          # Next row + 1
-          self.nfaces + yoff + n + 1,
-        ])
-        faces.append([
-          # Current row
-          yoff + n,
-          # Current row + 1
-          yoff + n + 1,
-          # Next row + 1
-          self.nfaces + yoff + n + 1,
-        ])
-        colors.append([n / self.nfaces, 1 - n / self.nfaces, m / self.nfaces, 0.7])
-        colors.append([n / self.nfaces, 1 - n / self.nfaces, m / self.nfaces, 0.8])
-
-    faces = np.array(faces, dtype=np.uint32)
-    colors = np.array(colors, dtype=np.float32)
-
     # create the mesh item
     self.m1 = gl.GLMeshItem(
-      vertexes=verts,
-      faces=faces,
-      faceColors=colors,
+      vertexes=[],
+      faces=[],
+      faceColors=[],
       smooth=False,
       drawEdges=True,
     )
@@ -134,8 +98,6 @@ class Terrain(object):
     timer.timeout.connect(self.update)
     timer.start(10)
     self.start()
-    self.update()
-
 
 if __name__ == '__main__':
   t = Terrain()
