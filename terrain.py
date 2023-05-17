@@ -5,6 +5,9 @@ import pyqtgraph.opengl as gl
 import sys
 from opensimplex import OpenSimplex
 
+# Terrain flyover
+# Based off https://github.com/markjay4k/Audio-Spectrum-Analyzer-in-Python/blob/master/terrain.py
+# Video: https://www.youtube.com/watch?v=a1kxPd8Mdhw
 class Terrain(object):
   def __init__(self):
     """
