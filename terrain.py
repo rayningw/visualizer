@@ -7,22 +7,29 @@ from opensimplex import OpenSimplex
 
 class Terrain(object):
   def __init__(self):
-    self.app = QtWidgets.QApplication(sys.argv)
+    """
+    Initialize the graphics window and mesh
+    """
 
+    # setup the view window
+    self.app = QtWidgets.QApplication(sys.argv)
     self.w = gl.GLViewWidget()
     self.w.setGeometry(0, 110, 1920, 1080)
     self.w.show()
     self.w.setWindowTitle('Terrain')
     self.w.setCameraPosition(distance=30, elevation=8)
 
+    # constants and arrays
     self.nsteps = 1
     self.ypoints = range(-20, 22, self.nsteps)
     self.xpoints = range(-20, 22, self.nsteps)
     self.nfaces = len(self.ypoints)
     self.offset = 0
 
+    # perlin noise object
     self.tmp = OpenSimplex(0)
 
+    # create the veritices array
     verts = [
       [
         x, y, 1.5 * self.tmp.noise2(x=n/5, y=m/5)
@@ -30,6 +37,7 @@ class Terrain(object):
     ]
     verts = np.array(verts, dtype=np.float32)
 
+    # create the faces and colors arrays
     faces = []
     colors = []
     for m in range(self.nfaces - 1):
@@ -57,6 +65,7 @@ class Terrain(object):
     faces = np.array(faces, dtype=np.uint32)
     colors = np.array(colors, dtype=np.float32)
 
+    # create the mesh item
     self.m1 = gl.GLMeshItem(
       vertexes=verts,
       faces=faces,
@@ -68,9 +77,12 @@ class Terrain(object):
     self.w.addItem(self.m1)
 
   def update(self):
+    """
+    update the mesh and shift the noise each time
+    """
     verts = [
       [
-        x, y, 2.5 * self.tmp.noise2(x=n / 5 + self.offset, y=m / 5 + self.offset)
+        x, y, 2.5 * self.tmp.noise2(x=n/5 + self.offset, y=m/5 + self.offset)
       ] for n, x in enumerate(self.xpoints) for m, y in enumerate(self.ypoints)
     ]
     verts = np.array(verts, dtype=np.float32)
@@ -102,8 +114,10 @@ class Terrain(object):
     faces = np.array(faces, dtype=np.uint32)
     colors = np.array(colors, dtype=np.float32)
 
-    self.m1.setMeshData(vertexes=verts, faces=faces, faceColors=colors)
-    self.offset -= 0.1
+    self.m1.setMeshData(
+      vertexes=verts, faces=faces, faceColors=colors
+    )
+    self.offset -= 0.18
 
   def start(self):
     """
@@ -111,7 +125,7 @@ class Terrain(object):
     """
     if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
       self.app.exec()
-  
+
   def animation(self):
     """
     calls the update method to run in a loop
@@ -122,6 +136,7 @@ class Terrain(object):
     self.start()
     self.update()
 
+
 if __name__ == '__main__':
-    t = Terrain()
-    t.animation()
+  t = Terrain()
+  t.animation()
