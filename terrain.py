@@ -70,7 +70,7 @@ class Terrain(object):
       vertexes=verts,
       faces=faces,
       faceColors=colors,
-      smooth=True,
+      smooth=False,
       drawEdges=True,
     )
     self.m1.setGLOptions('additive')
