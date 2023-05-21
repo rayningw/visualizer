@@ -4,6 +4,8 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 import sys
 from opensimplex import OpenSimplex
+import struct
+import pyaudio
 
 # Terrain flyover
 # Based off https://github.com/markjay4k/Audio-Spectrum-Analyzer-in-Python/blob/master/terrain.py
@@ -16,40 +18,52 @@ class Terrain(object):
 
     # setup the view window
     self.app = QtWidgets.QApplication(sys.argv)
-    self.w = gl.GLViewWidget()
-    self.w.setGeometry(0, 110, 1920, 1080)
-    self.w.show()
-    self.w.setWindowTitle('Terrain')
-    self.w.setCameraPosition(distance=30, elevation=8)
+    self.window = gl.GLViewWidget()
+    self.window.setGeometry(0, 110, 1920, 1080)
+    self.window.show()
+    self.window.setWindowTitle('Terrain')
+    self.window.setCameraPosition(distance=30, elevation=8)
 
-    # constants and arrays
+    # constants
     self.nsteps = 1
     self.ypoints = range(-20, 22, self.nsteps)
     self.xpoints = range(-20, 22, self.nsteps)
     self.nfaces = len(self.ypoints)
+
+    # current camera point
     self.offset = 0
 
     # perlin noise object
-    self.tmp = OpenSimplex(0)
+    self.noise = OpenSimplex(0)
 
-    # create the mesh item
-    self.m1 = gl.GLMeshItem(
-      vertexes=[],
-      faces=[],
-      faceColors=[],
+    # create the mesh elements
+    verts, faces, colors = self.mesh()
+
+    # create the mesh
+    self.mesh1 = gl.GLMeshItem(
+      vertexes=verts,
+      faces=faces,
+      faceColors=colors,
       smooth=False,
       drawEdges=True,
     )
-    self.m1.setGLOptions('additive')
-    self.w.addItem(self.m1)
+    self.mesh1.setGLOptions('additive')
+    self.window.addItem(self.mesh1)
 
   def update(self):
     """
     update the mesh and shift the noise each time
     """
+    verts, faces, colors = self.mesh()
+    self.mesh1.setMeshData(
+      vertexes=verts, faces=faces, faceColors=colors
+    )
+    self.offset -= 0.18
+
+  def mesh(self):
     verts = [
       [
-        x, y, 2.5 * self.tmp.noise2(x=n/5 + self.offset, y=m/5 + self.offset)
+        x, y, 2.5 * self.noise.noise2(x=n/5 + self.offset, y=m/5 + self.offset)
       ] for n, x in enumerate(self.xpoints) for m, y in enumerate(self.ypoints)
     ]
     verts = np.array(verts, dtype=np.float32)
@@ -81,10 +95,7 @@ class Terrain(object):
     faces = np.array(faces, dtype=np.uint32)
     colors = np.array(colors, dtype=np.float32)
 
-    self.m1.setMeshData(
-      vertexes=verts, faces=faces, faceColors=colors
-    )
-    self.offset -= 0.18
+    return verts, faces, colors
 
   def start(self):
     """
