@@ -24,14 +24,38 @@ class Terrain(object):
     self.window.setWindowTitle('Terrain')
     self.window.setCameraPosition(distance=30, elevation=8)
 
-    # constants
-    self.nsteps = 1
-    self.ypoints = range(-20, 22, self.nsteps)
-    self.xpoints = range(-20, 22, self.nsteps)
+    # distance between each vertex
+    # convenient to set such that len(self.ypoints) * len(self.xpoints) == power
+    # of 2 in order to help FFT
+    self.nsteps = 1.3
+
+    # x and y coords of the vertices
+    self.ypoints = np.arange(-20, 20 + self.nsteps, self.nsteps)
+    self.xpoints = np.arange(-20, 20 + self.nsteps, self.nsteps)
+
+    # number of triangle faces
+    # NOTE(ray): have no idea why it's set this way
     self.nfaces = len(self.ypoints)
 
     # current camera point
     self.offset = 0
+
+    # sampling rate
+    self.RATE = 44100
+
+    # number of samples per read
+    self.CHUNK = len(self.xpoints) * len(self.ypoints)
+
+    # audio objects
+    self.p = pyaudio.PyAudio()
+    self.stream = self.p.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=self.RATE,
+        input=True,
+        output=True,
+        frames_per_buffer=self.CHUNK,
+    )
 
     # perlin noise object
     self.noise = OpenSimplex(0)
@@ -54,17 +78,39 @@ class Terrain(object):
     """
     update the mesh and shift the noise each time
     """
-    verts, faces, colors = self.mesh()
+
+    waveform_data = self.stream.read(self.CHUNK)
+
+    verts, faces, colors = self.mesh(waveform_data=waveform_data)
     self.mesh1.setMeshData(
       vertexes=verts, faces=faces, faceColors=colors
     )
-    self.offset -= 0.18
+    self.offset -= 0.05
 
-  def mesh(self):
+  # NOTE(ray): For some reason the waveform needs to be passed in instead of
+  # being read here
+  def mesh(self, waveform_data=None):
+
+    if waveform_data is not None:
+      # convert into integer array
+      waveform_data = struct.unpack(str(2 * self.CHUNK) + 'B', waveform_data)
+      # something about taking every other element
+      waveform_data = np.array(waveform_data, dtype='b')[::2] + 128
+      # center around 0
+      waveform_data = np.array(waveform_data, dtype='int32') - 128
+      # reduce amplitude
+      waveform_data = waveform_data * 0.04
+      # reshape into 2d array
+      waveform_data = waveform_data.reshape((len(self.xpoints), len(self.ypoints)))
+    else:
+      waveform_data = np.array([1] * 1024)
+      waveform_data = waveform_data.reshape((len(self.xpoints), len(self.ypoints)))
+
     verts = [
       [
-        x, y, 2.5 * self.noise.noise2(x=n/5 + self.offset, y=m/5 + self.offset)
-      ] for n, x in enumerate(self.xpoints) for m, y in enumerate(self.ypoints)
+        x, y,
+        waveform_data[x_idx][y_idx] * self.noise.noise2(x=x_idx/5 + self.offset, y=y_idx/5 + self.offset)
+      ] for x_idx, x in enumerate(self.xpoints) for y_idx, y in enumerate(self.ypoints)
     ]
     verts = np.array(verts, dtype=np.float32)
 
