@@ -1,3 +1,4 @@
+import numba
 import numpy as np
 import pygame as pg
 
@@ -10,70 +11,58 @@ x_start, y_start = -2, -2  # an interesting region starts here
 space_width, space_height = 4, 4  # for 4 units up and right
 density_per_unit = 100  # how many pixels per unit
 
-# max allowed iterations
-THRESHOLD = 20
+# resolution
+res = res_width, res_height = space_width * density_per_unit, space_height * density_per_unit
 
-# interesting radius to revolve
-RADIUS = 0.7885
+# max allowed iterations
+threshold = 20
 
 # number of segments in revolution
-NUM_SEGMENTS = 100
+num_segments = 100
 
-res = res_width, res_height = space_width * density_per_unit, space_height * density_per_unit
+# real and imaginary axis
+re = np.linspace(x_start, x_start + space_width, space_width * density_per_unit)
+im = np.linspace(y_start, y_start + space_height, space_height * density_per_unit)
+
+# we represent c as c = r*cos(a) + i*r*sin(a) = r*e^{i*a}
+radius = 0.7885
+angles = np.linspace(0, 2*np.pi, num_segments)
 
 # Renders a Julia set with C revolving around the origin
 class JuliaRenderer:
-    def __init__(self, screen, screen_array, radius, num_segments):
+    def __init__(self, screen, screen_array):
         self.screen = screen
         self.screen_array = screen_array
 
-        # real and imaginary axis
-        self.re = np.linspace(x_start, x_start + space_width, space_width * density_per_unit)
-        self.im = np.linspace(y_start, y_start + space_height, space_height * density_per_unit)
-
-        # we represent c as c = r*cos(a) + i*r*sin(a) = r*e^{i*a}
-        self.radius = radius
-        self.angles = np.linspace(0, 2*np.pi, num_segments)
-
-        self.num_segments = num_segments
-
-    def julia_quadratic(self, zx, zy, cx, cy, threshold):
-        """Calculates whether the number z[0] = zx + i*zy with a constant c = x + i*y
-        belongs to the Julia set. In order to belong, the sequence 
-        z[i + 1] = z[i]**2 + c, must not diverge after 'threshold' number of steps.
-        The sequence diverges if the absolute value of z[i+1] is greater than 4.
-        
-        :param float zx: the x component of z[0]
-        :param float zy: the y component of z[0]
-        :param float cx: the x component of the constant c
-        :param float cy: the y component of the constant c
-        :param int threshold: the number of iterations to considered it converged
-        """
-        # initial conditions
-        z = complex(zx, zy)
+    @staticmethod
+    @numba.njit(fastmath=True, parallel=True)
+    def render(segment_index, screen_array):
+        # Compute the C number
+        cx, cy = radius * np.cos(angles[segment_index]), radius * np.sin(angles[segment_index])
         c = complex(cx, cy)
         
-        for i in range(threshold):
-            z = z**2 + c
-            if abs(z) > 4.:  # it diverged
-                return i
-            
-        return threshold - 1  # it didn't diverge
-
-    def render(self, tick, threshold):
-        segment_index = tick % self.num_segments
-
-        # Compute the C number
-        cx, cy = self.radius * np.cos(self.angles[segment_index]), self.radius * np.sin(self.angles[segment_index])
-        
         # iterations for the given threshold
-        for i in range(len(self.re)):
-            for j in range(len(self.im)):
-                escape_count = self.julia_quadratic(self.re[i], self.im[j], cx, cy, threshold)
+        for i in numba.prange(len(re)):
+            for j in range(len(im)):
+                # Compute Julia set membership
+                z = complex(re[i], im[j])
+                escape_count = 0
+                for _i in range(threshold):
+                    z = z**2 + c
+                    if z.real ** 2 + z.imag ** 2 > 4:
+                        break
+                    escape_count += 1
+
+                # Colour based on escape ratio
                 escape_ratio = escape_count / threshold
                 col = int(texture_size * escape_ratio)
-                self.screen_array[i, j] = texture_array[col, col]
+                screen_array[i, j] = texture_array[col, col]
         
+        return screen_array
+
+    def animate(self, tick):
+        segment_index = tick % num_segments
+        self.render(segment_index, self.screen_array)
         pg.surfarray.blit_array(self.screen, self.screen_array)
 
 class App:
@@ -81,13 +70,13 @@ class App:
         self.screen = pg.display.set_mode(res, pg.SCALED)
         self.clock = pg.time.Clock()
         self.screen_array = np.full((res_width, res_height, 3), [0, 0, 0], dtype=np.uint8)
-        self.julia = JuliaRenderer(self.screen, self.screen_array, RADIUS, NUM_SEGMENTS)
+        self.julia = JuliaRenderer(self.screen, self.screen_array)
 
     def run(self):
         tick = 0
         while True:
             self.screen.fill('black')
-            self.julia.render(tick, THRESHOLD)
+            self.julia.animate(tick)
             pg.display.flip()
 
             [exit() for i in pg.event.get() if i.type == pg.QUIT]
