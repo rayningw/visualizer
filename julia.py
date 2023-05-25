@@ -1,4 +1,4 @@
-import timeit
+from math import log
 import numba
 import numpy as np
 import pygame as pg
@@ -22,7 +22,7 @@ threshold = 32
 num_segments = 360
 
 # time for one revolution
-revolution_millis = 8000
+revolution_millis = 10000
 millis_per_segment = revolution_millis / num_segments
 
 # real and imaginary axis
@@ -41,7 +41,7 @@ class JuliaRenderer:
 
     @staticmethod
     @numba.njit(fastmath=True, parallel=True)
-    def render(segment_index, screen_array):
+    def render(segment_index, screen_array, smooth=False):
         # Compute the C number
         cx, cy = radius * np.cos(angles[segment_index]), radius * np.sin(angles[segment_index])
         c = complex(cx, cy)
@@ -51,15 +51,24 @@ class JuliaRenderer:
             for j in range(len(im)):
                 # Compute Julia set membership
                 z = complex(re[i], im[j])
-                escape_count = 0
+                num_iterations = 0
                 for _i in range(threshold):
                     z = z**2 + c
                     if z.real ** 2 + z.imag ** 2 > 4:
                         break
-                    escape_count += 1
+                    num_iterations += 1
+
+                if smooth:
+                    # Fractional escape count:
+                    # https://realpython.com/mandelbrot-set-python/#smoothing-out-the-banding-artifacts
+                    # NOTE(ray): Don't know how to adapt speedy magnitude check here
+                    escape_count = num_iterations + 1 - log(log(abs(z))) / log(2)
+                    unbounded_escape_ratio = escape_count / threshold
+                    escape_ratio = max(0.0, min(unbounded_escape_ratio, 1.0))
+                else:
+                    escape_ratio = num_iterations / threshold
 
                 # Colour based on escape ratio
-                escape_ratio = escape_count / threshold
                 col = int(texture_size * escape_ratio)
                 screen_array[i, j] = texture_array[col, col]
         
@@ -67,7 +76,7 @@ class JuliaRenderer:
 
     def animate(self, tick):
         segment_index = int(tick / millis_per_segment) % num_segments
-        self.render(segment_index, self.screen_array)
+        self.render(segment_index, self.screen_array, True)
         pg.surfarray.blit_array(self.screen, self.screen_array)
 
 class App:
