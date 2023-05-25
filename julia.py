@@ -1,3 +1,4 @@
+import timeit
 import numba
 import numpy as np
 import pygame as pg
@@ -9,16 +10,20 @@ texture_array = pg.surfarray.array3d(texture).astype(dtype=np.uint32)
 
 x_start, y_start = -2, -2  # an interesting region starts here
 space_width, space_height = 4, 4  # for 4 units up and right
-density_per_unit = 100  # how many pixels per unit
+density_per_unit = 128  # how many pixels per unit
 
 # resolution
 res = res_width, res_height = space_width * density_per_unit, space_height * density_per_unit
 
 # max allowed iterations
-threshold = 20
+threshold = 32
 
 # number of segments in revolution
-num_segments = 100
+num_segments = 360
+
+# time for one revolution
+revolution_millis = 8000
+millis_per_segment = revolution_millis / num_segments
 
 # real and imaginary axis
 re = np.linspace(x_start, x_start + space_width, space_width * density_per_unit)
@@ -61,7 +66,7 @@ class JuliaRenderer:
         return screen_array
 
     def animate(self, tick):
-        segment_index = tick % num_segments
+        segment_index = int(tick / millis_per_segment) % num_segments
         self.render(segment_index, self.screen_array)
         pg.surfarray.blit_array(self.screen, self.screen_array)
 
@@ -80,10 +85,10 @@ class App:
             pg.display.flip()
 
             [exit() for i in pg.event.get() if i.type == pg.QUIT]
-            self.clock.tick()
+            millis_elapsed = self.clock.tick()
             pg.display.set_caption(f'FPS: {self.clock.get_fps() :.2f}')
 
-            tick += 1
+            tick += millis_elapsed
 
 if __name__ == '__main__':
     app = App()
