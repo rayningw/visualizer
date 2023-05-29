@@ -1,7 +1,19 @@
 from math import log
+from scipy.fftpack import fft
+import matplotlib.pyplot as plt
 import numba
 import numpy as np
+import pyaudio
 import pygame as pg
+
+# Audio constants
+CHUNK = 1024 * 1             # frames per buffer (read)
+FORMAT = pyaudio.paInt16     # audio format (bytes per sample?)
+CHANNELS = 1                 # single channel for microphone
+RATE = 44100                 # samples per second
+
+HIGH_POINT = 100             # arbitrary high point
+DECAY_RATE = 1               # decay rate of previous volume (per millisecond) - set to 1 to decay completely
 
 # texture
 texture = pg.image.load('img/texture.jpg')
@@ -30,7 +42,9 @@ re = np.linspace(x_start, x_start + space_width, space_width * density_per_unit)
 im = np.linspace(y_start, y_start + space_height, space_height * density_per_unit)
 
 # we represent c as c = r*cos(a) + i*r*sin(a) = r*e^{i*a}
-radius = 0.7885
+#radius = 0.7885
+low_volume_radius = 1.5
+high_volume_radius = 0.5
 angles = np.linspace(0, 2*np.pi, num_segments)
 
 # Renders a Julia set with C revolving around the origin
@@ -41,8 +55,12 @@ class JuliaRenderer:
 
     @staticmethod
     @numba.njit(fastmath=True, parallel=True)
-    def render(segment_index, screen_array, smooth=False):
+    def render(radius_ratio, segment_index, screen_array, smooth=False):
         # Compute the C number
+        radius_delta = (low_volume_radius - high_volume_radius) * radius_ratio
+        radius = low_volume_radius - radius_delta
+        print("radius_ratio:", radius_ratio)
+        print("radius:", radius)
         cx, cy = radius * np.cos(angles[segment_index]), radius * np.sin(angles[segment_index])
         c = complex(cx, cy)
         
@@ -74,9 +92,9 @@ class JuliaRenderer:
         
         return screen_array
 
-    def animate(self, tick):
+    def animate(self, radius_ratio, tick):
         segment_index = int(tick / millis_per_segment) % num_segments
-        self.render(segment_index, self.screen_array, True)
+        self.render(radius_ratio, segment_index, self.screen_array, True)
         pg.surfarray.blit_array(self.screen, self.screen_array)
 
 class App:
@@ -86,17 +104,74 @@ class App:
         self.screen_array = np.full((res_width, res_height, 3), [0, 0, 0], dtype=np.uint8)
         self.julia = JuliaRenderer(self.screen, self.screen_array)
 
+        # pyaudio class instance
+        self.audio = pyaudio.PyAudio()
+
+        # Stream object to get data from microphone
+        self.stream = self.audio.open(
+            format=FORMAT,
+            channels=CHANNELS,
+            rate=RATE,
+            input=True,
+            output=True,
+            frames_per_buffer=CHUNK
+        )
+
+    def read_audio(self):
+        # Read binary data
+        # NOTE(ray): `exception_on_overflow` flag is needed to suppress exception -
+        # Unsure why it happens, maybe because we're not reading fast enough
+        data = self.stream.read(CHUNK, exception_on_overflow=False)
+
+        # Convert into numpy array
+        data_np = np.frombuffer(data, dtype=np.int16)
+
+        # Compute fft
+        data_fft = fft(data_np)
+
+        # Calculate the magnitude of the complex values
+        # NOTE(ray): Don't understand why we divide by buckets
+        data_scaled = np.abs(data_fft) / (2**7 * CHUNK)
+
+        return data_scaled
+
     def run(self):
         tick = 0
+        prev_audio_volume = 0
         while True:
-            self.screen.fill('black')
-            self.julia.animate(tick)
-            pg.display.flip()
-
+            # Determine FPS
             [exit() for i in pg.event.get() if i.type == pg.QUIT]
             millis_elapsed = self.clock.tick()
             pg.display.set_caption(f'FPS: {self.clock.get_fps() :.2f}')
 
+            # Read audio data
+            audio_data = self.read_audio()
+
+            # Get current audio volume
+            cur_audio_volume = np.sum(audio_data)
+
+            # Decay previous audio volume
+            decayed_audio_volume = prev_audio_volume * (1 - DECAY_RATE)**millis_elapsed
+            total_audio_volume = decayed_audio_volume + cur_audio_volume
+
+            # Copy over total audio volume
+            prev_audio_volume = total_audio_volume
+
+            # Calc volume ratio against arbitrary high point
+            volume_ratio = min(total_audio_volume / HIGH_POINT, 1)
+
+            print("*******")
+            print("millis_elapsed:", millis_elapsed)
+            print("decayed_audio_volume:", decayed_audio_volume)
+            print("total_audio_volume:", total_audio_volume)
+            print("volume_ratio:", volume_ratio)
+
+            # Paint Julia set
+            self.screen.fill('black')
+            self.julia.animate(volume_ratio, tick)
+            pg.display.flip()
+
+            # Progress tick
             tick += millis_elapsed
 
 if __name__ == '__main__':
