@@ -1,6 +1,5 @@
 from math import log
-from scipy.fftpack import fft
-import matplotlib.pyplot as plt
+from scipy.fft import rfft
 import numba
 import numpy as np
 import pyaudio
@@ -12,7 +11,7 @@ FORMAT = pyaudio.paInt16     # audio format (bytes per sample?)
 CHANNELS = 1                 # single channel for microphone
 RATE = 44100                 # samples per second
 
-HIGH_POINT = 100             # arbitrary high point
+HIGH_POINT = 2**12           # arbitrary high point
 DECAY_RATE = 1               # decay rate of previous volume (per millisecond) - set to 1 to decay completely
 
 # texture
@@ -94,7 +93,7 @@ class JuliaRenderer:
 
     def animate(self, radius_ratio, tick):
         segment_index = int(tick / millis_per_segment) % num_segments
-        self.render(radius_ratio, segment_index, self.screen_array, True)
+        self.render(radius_ratio, segment_index, self.screen_array, smooth=True)
         pg.surfarray.blit_array(self.screen, self.screen_array)
 
 class App:
@@ -116,6 +115,21 @@ class App:
             output=True,
             frames_per_buffer=CHUNK
         )
+    
+    @staticmethod
+    def get_frequency_data(data):
+        # Convert into numpy array
+        data_np = np.frombuffer(data, dtype=np.int16)
+
+        # Compute FFT (use real-FFT because input is real numbers)
+        data_fft = rfft(data_np)
+
+        # Compute the magnitude of the values
+        # Normalize by the size of the buffer
+        # NOTE(ray): In the video apparently we're meant to multiply by 2 first (?)
+        # NOTE(ray): In some other tutorials we're meant to square it (?)
+        data_transformed = np.abs(data_fft) / CHUNK
+        return data_transformed
 
     def read_audio(self):
         # Read binary data
@@ -123,17 +137,8 @@ class App:
         # Unsure why it happens, maybe because we're not reading fast enough
         data = self.stream.read(CHUNK, exception_on_overflow=False)
 
-        # Convert into numpy array
-        data_np = np.frombuffer(data, dtype=np.int16)
-
-        # Compute fft
-        data_fft = fft(data_np)
-
-        # Calculate the magnitude of the complex values
-        # NOTE(ray): Don't understand why we divide by buckets
-        data_scaled = np.abs(data_fft) / (2**7 * CHUNK)
-
-        return data_scaled
+        frequency_data = self.get_frequency_data(data)
+        return frequency_data
 
     def run(self):
         tick = 0
