@@ -15,6 +15,14 @@ HIGH_POINT = 2**12           # arbitrary high point
 DECAY_RATE = 1               # decay rate of previous volume (per millisecond) - set to 1 to decay completely
 MAX_SPEEDUP = 10             # max speedup factor
 
+MID_FREQ = 400               # start of mid-range frequencies
+HIGH_FREQ = 4000             # start of high-range frequencies
+
+# computed breakpoints
+points_per_freq = CHUNK / (RATE / 2)
+mid_freq_idx = int(points_per_freq * MID_FREQ)
+high_freq_idx = int(points_per_freq * HIGH_FREQ)
+
 # texture
 texture = pg.image.load('img/texture.jpg')
 texture_size = min(texture.get_size()) - 1
@@ -143,7 +151,7 @@ class App:
 
     def run(self):
         tick = 0
-        prev_audio_volume = 0
+        prev_volume = 0
         while True:
             # Determine FPS
             [exit() for i in pg.event.get() if i.type == pg.QUIT]
@@ -153,34 +161,48 @@ class App:
             # Read audio data
             audio_data = self.read_audio()
 
-            # Get current audio volume
-            cur_audio_volume = np.sum(audio_data)
+            # Determine breakdown of lows, mids, and highs
+            low_volume = np.sum(audio_data[0 : mid_freq_idx])
+            mid_volume = np.sum(audio_data[mid_freq_idx : high_freq_idx])
+            high_volume = np.sum(audio_data[high_freq_idx : ])
+            cur_volume = low_volume + mid_volume + high_volume
 
             # Decay previous audio volume
-            decayed_audio_volume = prev_audio_volume * (1 - DECAY_RATE)**millis_elapsed
-            total_audio_volume = decayed_audio_volume + cur_audio_volume
+            decayed_volume = prev_volume * (1 - DECAY_RATE)**millis_elapsed
+            total_volume = decayed_volume + cur_volume
 
             # Copy over total audio volume
-            prev_audio_volume = total_audio_volume
+            prev_volume = total_volume
 
-            # Calc volume ratio against arbitrary high point
-            volume_ratio = min(total_audio_volume / HIGH_POINT, 1)
+            # Calc volume ratios against arbitrary high point
+            total_volume_ratio = min(total_volume / HIGH_POINT, 1)
+            low_volume_ratio = min(low_volume / (HIGH_POINT / 3), 1)
+            mid_volume_ratio = min(mid_volume / (HIGH_POINT / 3), 1)
+            high_volume_ratio = min(high_volume / (HIGH_POINT / 3), 1)
 
             # Progress tick with a speedup
-            tick_increment = millis_elapsed * (1 + volume_ratio * MAX_SPEEDUP)
+            speedup_factor = np.average([mid_volume_ratio, high_volume_ratio]) * MAX_SPEEDUP
+            tick_increment = millis_elapsed * (1 + speedup_factor)
             tick += tick_increment
 
             print("*******")
             print("millis_elapsed:", millis_elapsed)
-            print("decayed_audio_volume:", decayed_audio_volume)
-            print("total_audio_volume:", total_audio_volume)
-            print("volume_ratio:", volume_ratio)
+            print("cur_volume:", cur_volume)
+            print("low_volume:", low_volume)
+            print("low_volume_ratio:", low_volume_ratio)
+            print("mid_volume:", mid_volume)
+            print("mid_volume_ratio:", mid_volume_ratio)
+            print("high_volume:", high_volume)
+            print("high_volume_ratio:", high_volume_ratio)
+            print("decayed_volume:", decayed_volume)
+            print("total_volume:", total_volume)
+            print("total_volume_ratio:", total_volume_ratio)
             print("tick_increment:", tick_increment)
             print("tick:", tick)
 
             # Paint Julia set
             self.screen.fill('black')
-            self.julia.animate(volume_ratio, tick)
+            self.julia.animate(low_volume_ratio, tick)
             pg.display.flip()
 
 if __name__ == '__main__':
