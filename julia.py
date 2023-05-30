@@ -13,6 +13,7 @@ RATE = 44100                 # samples per second
 
 HIGH_POINT = 2**12           # arbitrary high point
 DECAY_RATE = 1               # decay rate of previous volume (per millisecond) - set to 1 to decay completely
+MAX_SPEEDUP = 10             # max speedup factor
 
 # texture
 texture = pg.image.load('img/texture.jpg')
@@ -165,19 +166,22 @@ class App:
             # Calc volume ratio against arbitrary high point
             volume_ratio = min(total_audio_volume / HIGH_POINT, 1)
 
+            # Progress tick with a speedup
+            tick_increment = millis_elapsed * (1 + volume_ratio * MAX_SPEEDUP)
+            tick += tick_increment
+
             print("*******")
             print("millis_elapsed:", millis_elapsed)
             print("decayed_audio_volume:", decayed_audio_volume)
             print("total_audio_volume:", total_audio_volume)
             print("volume_ratio:", volume_ratio)
+            print("tick_increment:", tick_increment)
+            print("tick:", tick)
 
             # Paint Julia set
             self.screen.fill('black')
             self.julia.animate(volume_ratio, tick)
             pg.display.flip()
-
-            # Progress tick
-            tick += millis_elapsed
 
 if __name__ == '__main__':
     app = App()
