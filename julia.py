@@ -15,7 +15,6 @@ RATE = 44100                 # samples per second
 
 VOLUME_HIGH_POINT = 2**12    # arbitrary volume high point to calculate ratios
 DECAY_RATE = 1               # decay rate of previous volume (per millisecond) - set to 1 to decay completely
-MAX_SPEEDUP = 10             # max speedup factor
 
 MID_FREQ = 400               # start of mid-range frequencies
 HIGH_FREQ = 4000             # start of high-range frequencies
@@ -58,8 +57,11 @@ threshold = 32
 num_segments = 360
 
 # time for one revolution
-revolution_millis = 10000
+revolution_millis = 100000
 millis_per_segment = revolution_millis / num_segments
+
+# max speedup factor
+max_speedup = 100
 
 # real and imaginary axis
 re = np.linspace(x_start, x_start + space_width, space_width * density_per_unit)
@@ -67,7 +69,7 @@ im = np.linspace(y_start, y_start + space_height, space_height * density_per_uni
 
 # we represent c as c = r*cos(a) + i*r*sin(a) = r*e^{i*a}
 #radius = 0.7885
-low_volume_radius = 1.5
+low_volume_radius = 1.3
 high_volume_radius = 0.5
 angles = np.linspace(0, 2*np.pi, num_segments)
 
@@ -199,7 +201,7 @@ class App:
             high_volume_ratio = min(high_volume / (VOLUME_HIGH_POINT / 3), 1)
 
             # Progress tick with a speedup
-            speedup_factor = np.average([mid_volume_ratio, high_volume_ratio]) * MAX_SPEEDUP
+            speedup_factor = np.average([mid_volume_ratio, high_volume_ratio]) * max_speedup
             tick_increment = millis_elapsed * (1 + speedup_factor)
             tick += tick_increment
 
