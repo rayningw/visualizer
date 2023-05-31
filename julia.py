@@ -5,13 +5,15 @@ import numpy as np
 import pyaudio
 import pygame as pg
 
+pg.init()
+
 # Audio constants
 CHUNK = 1024 * 1             # frames per buffer (read)
 FORMAT = pyaudio.paInt16     # audio format (bytes per sample?)
 CHANNELS = 1                 # single channel for microphone
 RATE = 44100                 # samples per second
 
-HIGH_POINT = 2**12           # arbitrary high point
+VOLUME_HIGH_POINT = 2**12    # arbitrary volume high point to calculate ratios
 DECAY_RATE = 1               # decay rate of previous volume (per millisecond) - set to 1 to decay completely
 MAX_SPEEDUP = 10             # max speedup factor
 
@@ -28,6 +30,20 @@ texture = pg.image.load('img/texture.jpg')
 texture_size = min(texture.get_size()) - 1
 texture_array = pg.surfarray.array3d(texture).astype(dtype=np.uint32)
 
+# colours
+white = (255, 255, 255)
+green = (0, 255, 0)
+blue = (0, 0, 128)
+
+# metric labels
+metrics_start_x = 32
+metrics_start_y = 32
+metrics_font_size = 10
+metrics_spacing = 4
+metric_ratio_format = "{0:.0%}"
+metric_int_format = "{:.0f}"
+
+# rendering region
 x_start, y_start = -2, -2  # an interesting region starts here
 space_width, space_height = 4, 4  # for 4 units up and right
 density_per_unit = 128  # how many pixels per unit
@@ -108,6 +124,7 @@ class JuliaRenderer:
 class App:
     def __init__(self):
         self.screen = pg.display.set_mode(res, pg.SCALED)
+        self.font = pg.font.SysFont('monospace', metrics_font_size)
         self.clock = pg.time.Clock()
         self.screen_array = np.full((res_width, res_height, 3), [0, 0, 0], dtype=np.uint8)
         self.julia = JuliaRenderer(self.screen, self.screen_array)
@@ -174,11 +191,12 @@ class App:
             # Copy over total audio volume
             prev_volume = total_volume
 
-            # Calc volume ratios against arbitrary high point
-            total_volume_ratio = min(total_volume / HIGH_POINT, 1)
-            low_volume_ratio = min(low_volume / (HIGH_POINT / 3), 1)
-            mid_volume_ratio = min(mid_volume / (HIGH_POINT / 3), 1)
-            high_volume_ratio = min(high_volume / (HIGH_POINT / 3), 1)
+            # Calc volume ratios against high point
+            total_volume_ratio = min(total_volume / VOLUME_HIGH_POINT, 1)
+            low_volume_ratio = min(low_volume / (VOLUME_HIGH_POINT / 3), 1)
+            radius_ratio = low_volume_ratio
+            mid_volume_ratio = min(mid_volume / (VOLUME_HIGH_POINT / 3), 1)
+            high_volume_ratio = min(high_volume / (VOLUME_HIGH_POINT / 3), 1)
 
             # Progress tick with a speedup
             speedup_factor = np.average([mid_volume_ratio, high_volume_ratio]) * MAX_SPEEDUP
@@ -197,12 +215,33 @@ class App:
             print("decayed_volume:", decayed_volume)
             print("total_volume:", total_volume)
             print("total_volume_ratio:", total_volume_ratio)
+            print("radius_ratio:", radius_ratio)
+            print("speedup_factor:", speedup_factor)
             print("tick_increment:", tick_increment)
             print("tick:", tick)
 
             # Paint Julia set
             self.screen.fill('black')
             self.julia.animate(low_volume_ratio, tick)
+
+            # Paint metrics
+            metric_lines = [
+                "tick:              " + metric_int_format.format(tick),
+                "low_volume_ratio:  " + metric_ratio_format.format(low_volume_ratio),
+                "mid_volume_ratio:  " + metric_ratio_format.format(mid_volume_ratio),
+                "high_volume_ratio: " + metric_ratio_format.format(high_volume_ratio),
+                "radius_ratio:      " + metric_ratio_format.format(radius_ratio),
+                "speedup_factor:    " + metric_ratio_format.format(speedup_factor),
+            ]
+            for idx in range(len(metric_lines)):
+                line = metric_lines[idx]
+                text = self.font.render(line, True, white)
+                textRect = text.get_rect()
+                textRect_y = metrics_start_y + (metrics_font_size + metrics_spacing) * idx
+                textRect.topleft = (metrics_start_x, textRect_y)
+                self.screen.blit(text, textRect)
+
+            # Update display
             pg.display.flip()
 
 if __name__ == '__main__':
