@@ -26,8 +26,12 @@ high_freq_idx = int(points_per_freq * HIGH_FREQ)
 
 # texture
 texture = pg.image.load('img/texture.jpg')
-texture_size = min(texture.get_size()) - 1
+texture_size_x = texture.get_size()[0]
+texture_size_y = texture.get_size()[1]
 texture_array = pg.surfarray.array3d(texture).astype(dtype=np.uint32)
+
+# time taken to traverse all rows of the texture map
+millis_per_texture_traversal = 1000
 
 # colours
 white = (255, 255, 255)
@@ -81,11 +85,10 @@ class JuliaRenderer:
 
     @staticmethod
     @numba.njit(fastmath=True, parallel=True)
-    def render(radius_ratio, segment_index, screen_array, smooth=False):
+    def render(radius_ratio, segment_index, texture_row, screen_array, smooth=False):
         # Compute the C number
         radius_delta = (low_volume_radius - high_volume_radius) * radius_ratio
         radius = low_volume_radius - radius_delta
-        print("radius_ratio:", radius_ratio)
         print("radius:", radius)
         cx, cy = radius * np.cos(angles[segment_index]), radius * np.sin(angles[segment_index])
         c = complex(cx, cy)
@@ -113,14 +116,22 @@ class JuliaRenderer:
                     escape_ratio = num_iterations / threshold
 
                 # Colour based on escape ratio
-                col = int(texture_size * escape_ratio)
-                screen_array[i, j] = texture_array[col, col]
+                col = int(texture_size_x * escape_ratio)
+                screen_array[i, j] = texture_array[texture_row, col]
         
         return screen_array
 
     def animate(self, radius_ratio, tick):
         segment_index = int(tick / millis_per_segment) % num_segments
-        self.render(radius_ratio, segment_index, self.screen_array, smooth=True)
+        texture_tick = int(tick / millis_per_texture_traversal)
+        texture_row = (texture_tick % texture_size_y)
+
+        # move back and forth along the texture rows to avoid a jump
+        texture_tick_odd_cycle = (texture_tick // texture_size_y) % 2 == 1
+        if (texture_tick_odd_cycle):
+            texture_row = texture_size_y - texture_row
+
+        self.render(radius_ratio, segment_index, texture_row, self.screen_array, smooth=True)
         pg.surfarray.blit_array(self.screen, self.screen_array)
 
 class App:
