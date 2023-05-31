@@ -239,6 +239,7 @@ class App:
 
             # Paint metrics
             metric_lines = [
+                "millis_elapsed:    " + metric_int_format.format(millis_elapsed),
                 "tick:              " + metric_int_format.format(tick),
                 "low_volume_ratio:  " + metric_ratio_format.format(low_volume_ratio),
                 "mid_volume_ratio:  " + metric_ratio_format.format(mid_volume_ratio),
