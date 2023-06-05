@@ -77,6 +77,25 @@ low_volume_radius = 1.3
 high_volume_radius = 0.5
 angles = np.linspace(0, 2*np.pi, num_segments)
 
+# pixel width of each frequency graph bar
+freq_bar_width = 8
+
+# Renders a bar graph
+class BarGraphRenderer:
+    def __init__(self, screen, graph_start_x, graph_start_y, graph_height):
+        self.screen = screen
+        self.graph_start_x = graph_start_x
+        self.graph_start_y = graph_start_y
+        self.graph_height = graph_height
+
+    def render(self, values):
+        for i in range(len(values)):
+            value = values[i]
+            height = value * self.graph_height
+            top = self.graph_start_y + (self.graph_height - height)
+            left = self.graph_start_x + i * freq_bar_width
+            pg.draw.rect(self.screen, white, pg.Rect(left, top, freq_bar_width, height))
+
 # Renders a Julia set with C revolving around the origin
 class JuliaRenderer:
     def __init__(self, screen, screen_array):
@@ -141,6 +160,7 @@ class App:
         self.clock = pg.time.Clock()
         self.screen_array = np.full((res_width, res_height, 3), [0, 0, 0], dtype=np.uint8)
         self.julia = JuliaRenderer(self.screen, self.screen_array)
+        self.graph = BarGraphRenderer(self.screen, 32, 400, 80)
 
         # pyaudio class instance
         self.audio = pyaudio.PyAudio()
@@ -236,6 +256,22 @@ class App:
             # Paint Julia set
             self.screen.fill('black')
             self.julia.animate(low_volume_ratio, tick)
+
+            # Paint frequency bar graph
+            # Frequency graphs are in logarithmic scale
+            # HACK(ray): Multiply width by 2 each time
+            # TODO(ray): How do you have more bars than log2(len(audio_data))??
+            last_idx = 0
+            bar_span = 1
+            bars = []
+            for i in range(int(np.log2(len(audio_data)))):
+                to_idx = last_idx + bar_span
+                bar_data = audio_data[last_idx : to_idx]
+                bar = np.sum(bar_data) / VOLUME_HIGH_POINT
+                bars.append(bar)
+                last_idx = to_idx
+                bar_span = bar_span * 2
+            self.graph.render(bars)
 
             # Paint metrics
             metric_lines = [
