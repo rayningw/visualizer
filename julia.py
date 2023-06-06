@@ -83,23 +83,30 @@ high_volume_radius = 0.5
 angles = np.linspace(0, 2*np.pi, num_segments)
 
 # pixel width of each frequency graph bar
-freq_bar_width = 8
+freq_bar_width = 32
 
 # Renders a bar graph
 class BarGraphRenderer:
     def __init__(self, screen, graph_start_x, graph_start_y, graph_height):
+        self.font = pg.font.SysFont('monospace', metrics_font_size)
         self.screen = screen
         self.graph_start_x = graph_start_x
         self.graph_start_y = graph_start_y
         self.graph_height = graph_height
 
-    def render(self, values):
+    def render(self, values, labels):
         for i in range(len(values)):
             value = values[i]
             height = value * self.graph_height
             top = self.graph_start_y + (self.graph_height - height)
             left = self.graph_start_x + i * freq_bar_width
             pg.draw.rect(self.screen, white, pg.Rect(left, top, freq_bar_width, height))
+
+            text = self.font.render(labels[i], True, white)
+            textRect_y = self.graph_start_y + self.graph_height + metrics_spacing
+            textRect = text.get_rect()
+            textRect.topleft = (left, textRect_y)
+            self.screen.blit(text, textRect)
 
 # Renders a Julia set with C revolving around the origin
 class JuliaRenderer:
@@ -192,7 +199,7 @@ class App:
         # Normalize by the size of the buffer
         # NOTE(ray): In the video apparently we're meant to multiply by 2 first (?)
         # NOTE(ray): In some other tutorials we're meant to square it (?)
-        data_transformed = np.abs(data_fft) / CHUNK
+        data_transformed = np.divide(np.abs(data_fft), CHUNK)
         return data_transformed
 
     def read_audio(self):
@@ -268,15 +275,19 @@ class App:
             # TODO(ray): How do you have more bars than log2(len(audio_data))??
             last_idx = 0
             bar_span = 1
-            bars = []
+            bar_values = []
+            labels = []
             for i in range(int(np.log2(len(audio_data)))):
                 to_idx = last_idx + bar_span
                 bar_data = audio_data[last_idx : to_idx]
-                bar = np.sum(bar_data) / VOLUME_HIGH_POINT
-                bars.append(bar)
+                bar_value = np.sum(bar_data) / VOLUME_HIGH_POINT
+                bar_values.append(bar_value)
+                label = str(int(last_idx * freq_per_point))
+                labels.append(label)
+
                 last_idx = to_idx
                 bar_span = bar_span * 2
-            self.graph.render(bars)
+            self.graph.render(bar_values, labels)
 
             # Paint metrics
             metric_lines = [
