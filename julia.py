@@ -19,8 +19,13 @@ DECAY_RATE = 1               # decay rate of previous volume (per millisecond) -
 MID_FREQ = 400               # start of mid-range frequencies
 HIGH_FREQ = 4000             # start of high-range frequencies
 
-# computed breakpoints
-points_per_freq = CHUNK / (RATE / 2)
+# FFT output granularity
+# CHUNK / 2 is the length of the FFT output
+# RATE / 2 is the maximum sampleable frequency
+points_per_freq = (CHUNK / 2) / (RATE / 2)
+freq_per_point = 1 / points_per_freq
+
+# lo/mid/high frequency breakpoints
 mid_freq_idx = int(points_per_freq * MID_FREQ)
 high_freq_idx = int(points_per_freq * HIGH_FREQ)
 
